@@ -57,6 +57,28 @@ bash build_linux.sh
 
 产物：`dist/DesktopCalendar`（单文件）。
 
+### Linux 安装包（.deb）
+
+在上述产物基础上，生成 Debian 安装包（Ubuntu / 麒麟 / 统信 / 深度均可用）：
+
+```bash
+bash build_deb.sh                 # 版本号默认 1.0.0
+VERSION=1.2.0 bash build_deb.sh   # 自定义版本号
+```
+
+产物：`dist/desktopcalendar_<版本>_<架构>.deb`
+
+安装与卸载：
+
+```bash
+sudo dpkg -i dist/desktopcalendar_1.0.0_amd64.deb
+sudo apt-get -f install        # 若提示缺少依赖
+sudo apt-get remove desktopcalendar   # 卸载
+```
+
+装好后可直接在应用菜单搜索“桌面日历”，或终端执行 `desktopcalendar`；
+文件权限由包内元数据（755）决定，**无需再 chmod**。注意 `dpkg` 安装本身需要 root。
+
 ## 分发到其他设备
 
 - **Windows**：直接把 `dist\DesktopCalendar.exe` 拷贝过去双击运行，目标机不需要安装 Python 或任何依赖。
@@ -107,6 +129,7 @@ DesktopCalendar/
 ├── DesktopCalendar.spec     # PyInstaller 打包配置
 ├── build_windows.bat        # Windows 一键打包
 ├── build_linux.sh           # Linux 一键打包
+├── build_deb.sh             # 将 Linux 产物打包为 .deb 安装包
 └── requirements.txt
 ```
 
