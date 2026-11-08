@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>桌面日历 · 功能介绍</title>
+<style>
+  body{font-family:"Microsoft YaHei",sans-serif;max-width:860px;margin:30px auto;
+       padding:0 20px;color:#2d3748;line-height:1.8;}
+  h1{color:#2b6cb0;border-bottom:3px solid #2b6cb0;padding-bottom:8px;}
+  h2{color:#2b6cb0;margin-top:32px;}
+  li{margin:6px 0;}
+  .tag{background:#ebf4ff;color:#2b6cb0;border-radius:4px;padding:1px 8px;
+       font-size:13px;margin-right:6px;}
+</style>
+</head>
+<body>
+<h1>桌面日历 · 功能介绍</h1>
+<p>一款常驻桌面的透明日历工具，支持农历与节气显示、工作事件管理、重复事件、提醒、搜索与导入导出。全部数据保存在本机，无需联网。</p>
+
+<h2>主界面</h2>
+<ul>
+  <li><span class="tag">日期栏</span>页面包含今天时显示“年月日 星期 农历日期”，否则显示“年月”。</li>
+  <li><span class="tag">翻页</span>顶部 ◀ ▶ 按钮向前/向后翻页。</li>
+  <li><span class="tag">周号栏</span>最左侧显示每行所属周在一年中的周号，跨月周自动扩展。</li>
+  <li><span class="tag">日单元格</span>左上角显示日期与农历/节气；<b>双击</b>进入编辑状态。</li>
+</ul>
+
+<h2>工作事件</h2>
+<ul>
+  <li>每条事件包含：工作内容、开始时间、结束时间（默认当天 23:59）、状态。</li>
+  <li>状态自动推算：未开始 / 进行中 / 已完成 / 超期未完成。</li>
+  <li>编辑状态下回车自动新增编号条目；“确认完成”切换光标所在条的完成状态。</li>
+</ul>
+
+<h2>重复事件</h2>
+<ul>
+  <li>支持每天/每周/每月/每年及自定义日、周、月、年重复。</li>
+  <li>可设置重复限制：无限制 / 结束日期 / 重复次数。</li>
+  <li>可为重复事件统一设置提醒时间；“删除任务”将删除全部派生事件。</li>
+</ul>
+
+<h2>提醒</h2>
+<ul>
+  <li>事件可设置提醒时间，提醒日期最多提前 3 天。</li>
+  <li>支持当天内按 N 分钟 / N 小时重复提醒，并可限制最大次数。</li>
+</ul>
+
+<h2>总设置菜单</h2>
+<ul>
+  <li><span class="tag">隐藏日历</span>隐藏窗口（不退出），再次运行程序即可显示。</li>
+  <li><span class="tag">调整位置和大小</span>进入虚线框模式，拖动边缘缩放、内部移动，✓ 保存 / ✕ 取消。</li>
+  <li><span class="tag">切换色调</span>在浅色/深色调之间切换。</li>
+  <li><span class="tag">历史搜索</span>按关键字搜索所有日单元格内容，双击结果跳转。</li>
+  <li><span class="tag">导入/导出</span>支持文本(txt)、Excel(xlsx)、CalendarTask数据库(db)。</li>
+  <li><span class="tag">选择日期</span>多级日历选择后跳转并进入编辑。</li>
+  <li><span class="tag">设置</span>日历 / 单元格 / 高级 三组设置，支持恢复默认。</li>
+</ul>
+</body>
+</html>
