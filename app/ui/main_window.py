@@ -18,6 +18,7 @@ from app.core.recurrence import expand_repeat
 from app.core.settings import THEME_COLORS
 from app.ui.day_cell import DayCell
 from app.ui.cell_editor import CellEditor
+from app.ui.click_through import ClickThroughRegion, GlobalDoubleClickWatcher
 from app.ui.reminder_service import ReminderService
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.search_dialog import SearchDialog
@@ -59,6 +60,13 @@ class MainWindow(QWidget):
         self._build_ui()
         self._restore_geometry()
 
+        # 桌面穿透：窗口只在按钮/编辑面板处接收鼠标，其余区域（含日单元格）交给桌面
+        self._inputs = ClickThroughRegion(self)
+        # 日单元格不接收鼠标，双击靠全局监听识别（不抢占桌面/图标的事件）
+        self._dblclick = GlobalDoubleClickWatcher(self)
+        self._dblclick.doubleClicked.connect(self._on_global_double_click)
+        self._dblclick.start()
+
         self.reminders = ReminderService(db, settings)
         if settings.get("auto_postpone"):
             self.db.postpone_overdue(
@@ -69,6 +77,11 @@ class MainWindow(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(15000)
+
+        # WM 移动/重排窗口时可能重置 frame 的输入区域，定期补一次
+        self._region_timer = QTimer(self)
+        self._region_timer.timeout.connect(self._reapply_input_region)
+        self._region_timer.start(2000)
 
     # ---------------- UI 构建 ----------------
     def _build_ui(self):
@@ -104,6 +117,7 @@ class MainWindow(QWidget):
         btn_no = self._mk_btn("✕", "取消更改", self.adjust_cancel)
         ab.addWidget(btn_ok)
         ab.addWidget(btn_no)
+        self.adjust_buttons = [btn_ok, btn_no]
         self.adjustbar.setVisible(False)
         self.root.addWidget(self.adjustbar)
 
@@ -164,6 +178,89 @@ class MainWindow(QWidget):
             w = min(1100, int(screen.width() * 0.8))
             h = max(300, int(screen.height() * 0.32))
             self.setGeometry((screen.width() - w) // 2, 30, w, h)
+
+    # ---------------- 桌面穿透（鼠标输入区域） ----------------
+    def _interactive_rects(self):
+        """日历中允许接收鼠标的区域（窗口内坐标）。日单元格不在此列——全部让给桌面/图标"""
+        rects = []
+        for btn in (self.btn_prev, self.btn_next, self.btn_menu):
+            if btn.isVisible():
+                rects.append(QRect(btn.mapTo(self, QPoint(0, 0)), btn.size()))
+        if self.adjustbar.isVisible():
+            for btn in self.adjust_buttons:
+                if btn.isVisible():
+                    rects.append(QRect(btn.mapTo(self, QPoint(0, 0)), btn.size()))
+        if self.editor is not None and self.editor.isVisible():
+            rects.append(QRect(self.editor.geometry()))
+        return rects
+
+    def _sync_input_region(self):
+        inputs = getattr(self, "_inputs", None)
+        if inputs is None or not inputs.enabled:
+            return
+        if self._adjust:
+            inputs.release()      # 调整模式下整窗可拖动，避免拖到中途鼠标穿透丢事件
+            return
+        inputs.apply(self._interactive_rects())
+
+    def _schedule_input_sync(self):
+        QTimer.singleShot(0, self._sync_input_region)
+
+    def _reapply_input_region(self):
+        inputs = getattr(self, "_inputs", None)
+        if inputs is None or not inputs.enabled or not self.isVisible():
+            return
+        inputs.invalidate()
+        self._sync_input_region()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        QTimer.singleShot(120, self._reapply_input_region)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._schedule_input_sync()
+
+    def moveEvent(self, e):
+        super().moveEvent(e)
+        self._schedule_input_sync()
+
+    # ---------------- 全局双击 -> 打开编辑面板 ----------------
+    def _cell_at_screen(self, x, y):
+        for cell in self.cells.values():
+            if not cell.isVisible():
+                continue
+            top_left = cell.mapToGlobal(QPoint(0, 0))
+            if QRect(top_left, cell.size()).contains(x, y):
+                return cell
+        return None
+
+    def _on_global_double_click(self, x, y):
+        """全局双击：只有落在日单元格内、且桌面/图标没有响应时才打开编辑面板"""
+        if self._adjust or not self.isVisible():
+            return
+        if self.editor is not None and self.editor.isVisible():
+            top_left = self.editor.mapToGlobal(QPoint(0, 0))
+            if QRect(top_left, self.editor.size()).contains(x, y):
+                return          # 编辑面板自身区域，交给它自己处理
+        cell = self._cell_at_screen(x, y)
+        if cell is None:
+            return
+        pointer = self._dblclick.pointer()
+        if pointer and self._inputs.occluded(pointer[2]):
+            return              # 该点被其他应用窗口遮挡，这次双击是给那个应用的
+        before = self._dblclick.first_press_snapshot()
+        day = cell.day
+        QTimer.singleShot(320, lambda: self._open_editor_if_desktop_idle(day, before))
+
+    def _open_editor_if_desktop_idle(self, day, before):
+        """双击后 320ms 若桌面没有任何反应（没弹窗、焦点没变），才认为是给日历的双击"""
+        if before is None or not self.isVisible():
+            return
+        now = (self._dblclick.focus_window(), self._dblclick.root_children())
+        if now != before:
+            return              # 图标/桌面对这次双击有响应 —— 图标优先
+        self.open_editor(day)
 
     # ---------------- 布局计算 ----------------
     def _visible_weeks(self):
@@ -295,7 +392,6 @@ class MainWindow(QWidget):
                     self.grid.addWidget(ph, ri, ci + 1)
                 else:
                     cell = DayCell(d, self.settings)
-                    cell.doubleClicked.connect(self.open_editor)
                     cell.set_events(self._events_for_display(d, derived_map))
                     self.grid.addWidget(cell, ri, ci + 1)
                     self.cells[d] = cell
@@ -320,6 +416,7 @@ class MainWindow(QWidget):
         if self.editor:
             self.editor.raise_()
         self.update()
+        self._schedule_input_sync()
 
     def _events_for_display(self, d, derived_map=None):
         reminded, normal = [], []
@@ -431,7 +528,9 @@ class MainWindow(QWidget):
             self.editor.move((self.width() - w) // 2, (self.height() - h) // 2)
         self.editor.show()
         self.editor.raise_()
+        self.activateWindow()      # 双击不经过本窗口，需要主动取得焦点才能输入
         self.editor.setFocus()
+        self._sync_input_region()
 
     def _editor_closed(self):
         self.editor = None
@@ -442,6 +541,7 @@ class MainWindow(QWidget):
             self.editor.closed.disconnect()
             self.editor.close()
             self.editor = None
+        self._schedule_input_sync()
 
     # ---------------- 总设置菜单 ----------------
     def show_menu(self):
@@ -528,6 +628,7 @@ class MainWindow(QWidget):
         self._orig_geo = self.geometry()
         self.menubar.setVisible(False)
         self.adjustbar.setVisible(True)
+        self._inputs.release()
         self.update()
 
     def _exit_adjust(self, save):
@@ -542,6 +643,7 @@ class MainWindow(QWidget):
         self.menubar.setVisible(True)
         self.adjustbar.setVisible(False)
         self.update()
+        self._reapply_input_region()
 
     def adjust_confirm(self):
         self._exit_adjust(True)

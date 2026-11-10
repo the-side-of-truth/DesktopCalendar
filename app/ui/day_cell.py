@@ -2,7 +2,7 @@
 """日单元格：左上角日期+农历/节气，下方为工作事件列表"""
 import datetime
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QWidget
 
@@ -19,15 +19,12 @@ STATUS_COLORS = {
 
 
 class DayCell(QFrame):
-    doubleClicked = pyqtSignal(datetime.date)
-
     def __init__(self, day, settings, parent=None):
         super().__init__(parent)
         self.day = day
         self.settings = settings
         self.events = []
         self._labels = []
-        self.setCursor(Qt.PointingHandCursor)
         self._build()
         self.apply_style()
 
@@ -113,13 +110,11 @@ class DayCell(QFrame):
             lb.setWordWrap(False)
             self.body.addWidget(lb)
             self._labels.append(lb)
+        self._last_max_lines = self._max_lines()
 
     def _visible_slice(self):
         """按单元格可用高度裁剪可见行数，超出以 +n 提示"""
-        line_h = self.fontMetrics().lineSpacing() + 1
-        header_h = self.num_label.sizeHint().height() + 6
-        avail = self.height() - header_h - 6
-        max_lines = max(1, avail // max(1, line_h))
+        max_lines = self._max_lines()
         if len(self.events) <= max_lines:
             return self.events
         cut = max(1, max_lines - 1)
@@ -128,11 +123,15 @@ class DayCell(QFrame):
         shown = list(shown) + [{"content": "…… 还有%d条" % rest, "status": STATUS_TODO}]
         return shown
 
+    def _max_lines(self):
+        line_h = self.fontMetrics().lineSpacing() + 1
+        header_h = self.num_label.sizeHint().height() + 6
+        avail = self.height() - header_h - 6
+        return max(1, avail // max(1, line_h))
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        self._rebuild_lines()
-
-    def mouseDoubleClickEvent(self, e):
-        if e.button() == Qt.LeftButton:
-            self.doubleClicked.emit(self.day)
-        super().mouseDoubleClickEvent(e)
+        # 仅在可用行数变化时重建，避免拖动/缩放时每帧增删控件造成跳动
+        max_lines = self._max_lines()
+        if max_lines != getattr(self, "_last_max_lines", None):
+            self._rebuild_lines()
